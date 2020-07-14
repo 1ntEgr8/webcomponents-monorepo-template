@@ -88,3 +88,6 @@ tsconfig.json (nk-carousel)
   ]
 }
 ```
+
+## TODOS
+* Make publishing and versioning components simpler. Right now, you will have to do it manually.
