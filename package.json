@@ -1,0 +1,28 @@
+{
+  "name": "root",
+  "private": true,
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "yarn run build:ts",
+    "build:ts": "yarn run tsc --build",
+    "clean": "yarn run build:ts --clean",
+    "storybook": "yarn build && start-storybook"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.10.4",
+    "@storybook/addons": "^5.3.19",
+    "@storybook/html": "^5.3.19",
+    "@storybook/theming": "^5.3.19",
+    "babel-loader": "^8.1.0",
+    "chalk": "^4.1.0",
+    "commander": "^5.1.0",
+    "handlebars": "^4.7.6",
+    "lerna": "^3.22.1",
+    "rimraf": "^3.0.2",
+    "ts-loader": "^8.0.0",
+    "typescript": "^3.9.6"
+  },
+  "dependencies": {}
+}

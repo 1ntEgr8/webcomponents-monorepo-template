@@ -1,0 +1,192 @@
+#!/usr/bin/env node
+
+const { program } = require("commander");
+const fs = require("fs");
+const path = require("path");
+const chalk = require("chalk");
+const Handlebars = require("handlebars");
+const rimraf = require("rimraf");
+const { exec } = require("child_process");
+
+const TEMPLATE_DIR = path.join(__dirname, "templates");
+const TSCONFIG_PATH = path.join(__dirname, "../", "tsconfig.json");
+
+program
+    .command("add <component>")
+    .description("add a web component to the repo")
+    .action(component => {
+        addComponent(component);
+    });
+
+program
+    .command("remove <component>")
+    .description("remove a web component from the repo")
+    .action(component => {
+        removeComponent(component);
+    });
+
+function validateComponentName(name) {
+    return name.match(/[a-z]+-[a-z-]+/);
+}
+
+function processName(name) {
+    const firstDash = name.indexOf("-");
+    return [name.slice(0, firstDash), name.slice(firstDash + 1)];
+}
+
+function getTemplate(path) {
+    const data = fs.readFileSync(path, { encoding: "utf8" });
+    return Handlebars.compile(data);
+}
+
+function kebabToPascal(s) {
+    const parts = s.split("-");
+    let res = "";
+    for (let part of parts) {
+        res += capitalize(part);
+    }
+    return res;
+}
+
+function capitalize(s) {
+    return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function addComponent(name) {
+    if (!validateComponentName(name)) {
+        console.error(
+            "component name should be of the form '<org-name>-<name>'. eg: 'nk-button'"
+        );
+        process.exit(1);
+    }
+
+    const [, componentName] = processName(name);
+    const packagePath = path.join(__dirname, "../", "packages", componentName);
+
+    if (fs.existsSync(packagePath)) {
+        console.error(
+            chalk.red(`ERROR: The package \`${componentName}\` already exists`)
+        );
+        process.exit(1);
+    } else {
+        const kebabName = name;
+        const pascalName = kebabToPascal(name);
+
+        const packageJsonTempl = getTemplate(
+            path.join(TEMPLATE_DIR, "package.template.json.hbs")
+        );
+        const wcTempl = getTemplate(
+            path.join(TEMPLATE_DIR, "wc.template.ts.hbs")
+        );
+        const wcStoriesTempl = getTemplate(
+            path.join(TEMPLATE_DIR, "wc.stories.template.ts.hbs")
+        );
+        const tsconfigData = fs.readFileSync(
+            path.join(TEMPLATE_DIR, "tsconfig.template.json")
+        );
+
+        fs.mkdirSync(packagePath);
+        fs.mkdirSync(path.join(packagePath, "src"));
+
+        const packageJsonPath = path.join(packagePath, "package.json");
+        const wcPath = path.join(packagePath, "src", `${kebabName}.ts`);
+        const wcStoriesPath = path.join(
+            packagePath,
+            "src",
+            `${kebabName}.stories.ts`
+        );
+        const tsconfigPath = path.join(packagePath, "tsconfig.json");
+
+        fs.writeFile(packageJsonPath, packageJsonTempl({ kebabName }), err => {
+            if (err) throw err;
+        });
+        fs.writeFile(wcPath, wcTempl({ kebabName, pascalName }), err => {
+            if (err) throw err;
+        });
+        fs.writeFile(
+            wcStoriesPath,
+            wcStoriesTempl({ kebabName, pascalName }),
+            err => {
+                if (err) throw err;
+            }
+        );
+        fs.writeFile(tsconfigPath, tsconfigData, err => {
+            if (err) throw err;
+        });
+
+        const config = JSON.parse(fs.readFileSync(TSCONFIG_PATH));
+        const newRef = {
+            path: `packages/${componentName}`
+        };
+
+        if (
+            config.references.filter(ref => ref.path == newRef.path).length == 0
+        ) {
+            config.references.push(newRef);
+        }
+
+        fs.writeFile(TSCONFIG_PATH, JSON.stringify(config, null, 4), err => {
+            if (err) throw err;
+        });
+
+        exec("yarn", err => {
+            if (err) {
+                throw err;
+            } else {
+                console.log(chalk.green("🎉 Done!\n"));
+                console.log(chalk.yellow("⚙️ Next steps:"));
+                console.log(
+                    `* Run ${chalk.blue(
+                        "yarn run storybook"
+                    )} to view the component`
+                );
+                console.log(
+                    "* Change directories to " +
+                        chalk.blue(`packages/${componentName}`)
+                );
+                console.log(
+                    `* Change the ${chalk.magenta("name")} and ${chalk.magenta(
+                        "author"
+                    )} fields in ${chalk.blue("package.json")}`
+                );
+                console.log(
+                    chalk.gray(
+                        "HINT: make sure to scope the name of your package! (eg: @neko/nk-button)"
+                    )
+                );
+            }
+        });
+    }
+}
+
+function removeComponent(name) {
+    if (!validateComponentName(name)) {
+        console.error(
+            chalk.red(
+                "ERROR: component name should be of the form '<org-name>-<name>'. eg: 'nk-button'"
+            )
+        );
+        process.exit(1);
+    }
+    const [, componentName] = processName(name);
+    const packagePath = path.join(__dirname, "../", "packages", componentName);
+    if (!fs.existsSync(packagePath)) {
+        console.error(
+            chalk.red(`ERROR: The package at ${packagePath} does not exist`)
+        );
+        process.exit(1);
+    }
+    rimraf.sync(packagePath);
+    const config = JSON.parse(fs.readFileSync(TSCONFIG_PATH));
+    config.references = config.references.filter(
+        ref => ref.path != `packages/${componentName}`
+    );
+
+    fs.writeFile(TSCONFIG_PATH, JSON.stringify(config, null, 4), err => {
+        if (err) throw err;
+    });
+
+    console.log(chalk.green(`🎉 Removed ${name}`));
+}
+
+program.parse(process.argv);

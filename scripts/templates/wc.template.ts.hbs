@@ -1,0 +1,12 @@
+import { define, html, Hybrids } from 'hybrids';
+
+interface {{ pascalName }} extends HTMLElement {
+}
+
+export const {{ pascalName }}: Hybrids<{{ pascalName }}> = {
+    render: () => html`
+        <h1>{{ kebabName }}</h1>
+    `
+};
+
+define('{{ kebabName }}', {{ pascalName }});
